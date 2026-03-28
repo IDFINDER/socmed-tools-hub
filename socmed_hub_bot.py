@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Social Media Tools Hub Bot - Premium Central Hub
-المركز الرئيسي لإدارة جميع البوتات والاشتراكات
 """
 
 import os
@@ -40,33 +39,26 @@ BOTS = {
     "analyzer": {
         "name": "📊 بوت تحليل يوتيوب",
         "username": "YouTube_data_analyzer_bot",
-        "description": "تحليل إحصائيات الفيديوهات والقنوات بشكل متقدم",
         "icon": "📊",
-        "order": 1,
-        "limit_text": "5 تحليلات يومياً"
+        "order": 1
     },
     "playlist": {
         "name": "🎬 بوت استخراج روابط يوتيوب",
         "username": "YouTube_Playlist_Extractor_bot",
-        "description": "استخراج جميع روابط قوائم التشغيل والقنوات",
         "icon": "🎬",
-        "order": 2,
-        "limit_text": "5 استخراجات يومياً"
+        "order": 2
     },
     "thumbnail": {
         "name": "📸 بوت تحميل صور يوتيوب",
         "username": "YouTube_photos_Extractor_bot",
-        "description": "تحميل صور الفيديوهات بأعلى جودة",
         "icon": "📸",
-        "order": 3,
-        "limit_text": "5 صور يومياً"
+        "order": 3
     }
 }
 
 # ========== دوال قاعدة البيانات ==========
 
 def get_or_create_user(user_id, first_name, username, language_code):
-    """الحصول على معلومات المستخدم أو إنشاؤه"""
     try:
         response = supabase.table('users').select('*').eq('user_id', user_id).execute()
         
@@ -83,7 +75,6 @@ def get_or_create_user(user_id, first_name, username, language_code):
             response = supabase.table('users').insert(new_user).execute()
             user = response.data[0]
         
-        # جلب استخدامات جميع البوتات
         usage_data = {}
         for bot_id in BOTS.keys():
             usage = supabase.table('bot_usage').select('*').eq('user_id', user_id).eq('bot_name', bot_id).execute()
@@ -113,12 +104,10 @@ def get_or_create_user(user_id, first_name, username, language_code):
         return None
 
 def get_user_info(user_id):
-    """الحصول على معلومات المستخدم"""
     try:
         response = supabase.table('users').select('*').eq('user_id', user_id).execute()
         if response.data:
             user = response.data[0]
-            
             usage_data = {}
             for bot_id in BOTS.keys():
                 usage = supabase.table('bot_usage').select('*').eq('user_id', user_id).eq('bot_name', bot_id).execute()
@@ -126,25 +115,18 @@ def get_user_info(user_id):
                     usage_data[bot_id] = usage.data[0]
                 else:
                     usage_data[bot_id] = {'daily_uses': 0, 'total_uses': 0}
-            
-            return {
-                **user,
-                'usage': usage_data
-            }
+            return {**user, 'usage': usage_data}
         return None
     except Exception as e:
         logger.error(f"Error getting user info: {e}")
         return None
 
 def get_remaining_for_bot(user_id, bot_id):
-    """الحصول على عدد الاستخدامات المتبقية لبوت معين"""
     user = get_user_info(user_id)
     if not user:
         return FREE_LIMIT
-    
     if user['status'] == 'premium':
         return -1
-    
     usage = user.get('usage', {}).get(bot_id, {})
     daily_uses = usage.get('daily_uses', 0)
     return FREE_LIMIT - daily_uses
@@ -152,7 +134,6 @@ def get_remaining_for_bot(user_id, bot_id):
 # ========== لوحات المفاتيح ==========
 
 def get_main_keyboard():
-    """لوحة المفاتيح الرئيسية"""
     keyboard = [
         [KeyboardButton("🎬 البوتات المتاحة"), KeyboardButton("💎 اشتراك مميز")],
         [KeyboardButton("📊 إحصائياتي"), KeyboardButton("❓ المساعدة")]
@@ -160,7 +141,6 @@ def get_main_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_bots_inline_keyboard():
-    """أزرار مضمنة للبوتات"""
     keyboard = []
     for bot_id, bot_info in sorted(BOTS.items(), key=lambda x: x[1]['order']):
         keyboard.append([
@@ -172,16 +152,15 @@ def get_bots_inline_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 def get_premium_inline_keyboard():
-    """زر الاشتراك المميز"""
     payment_url = f"https://{RENDER_URL}/payment"
-    keyboard = [[InlineKeyboardButton("💎 اشتراك مميز - $10 مدى الحياة", web_app=WebAppInfo(url=payment_url))]]
+    keyboard = [[InlineKeyboardButton("💎 اشتراك مميز - 10 دولار مدى الحياة", web_app=WebAppInfo(url=payment_url))]]
     return InlineKeyboardMarkup(keyboard)
 
-# ========== أوامر البوت ==========
+# ========== أوامر البوت (نصوص بدون Markdown معقد) ==========
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """رسالة الترحيب مع عرض حالة المستخدم"""
     user = update.effective_user
+    first_name = user.first_name
     
     user_data = get_or_create_user(
         user.id,
@@ -195,46 +174,42 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     status = user_data['status']
-    premium_until = user_data.get('premium_until')
-    first_name = user.first_name
     
-    if status == 'premium' and premium_until:
-        premium_date = datetime.strptime(premium_until, '%Y-%m-%d').strftime('%Y/%m/%d')
-        status_text = f"👑 **مميز** (ينتهي في {premium_date})"
-        limit_text = "✅ **جميع البوتات: غير محدود**"
+    if status == 'premium':
+        status_text = "مميز"
+        limit_text = "جميع البوتات: غير محدود"
     else:
-        status_text = "🎁 **مجاني**"
-        limit_text = f"📊 **حد الاستخدام اليومي:** {FREE_LIMIT} عملية لكل بوت"
+        status_text = "مجاني"
+        limit_text = f"الحد اليومي: {FREE_LIMIT} عملية لكل بوت"
     
     welcome_text = (
-        f"🌐 **مرحباً بك {first_name} في بوت الأدوات الاجتماعية!** 🌐\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        f"💎 **حالتك:** {status_text}\n"
-        f"{limit_text}\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        "🎯 **ماذا يقدم هذا البوت؟**\n"
-        "هو مركز التحكم الرئيسي لجميع بوتاتي المتخصصة في تحميل وتحليل محتوى يوتيوب.\n\n"
-        "📱 **البوتات المتاحة:**\n\n"
-        "🎬 **استخراج روابط يوتيوب** - `@YouTube_Playlist_Extractor_bot`\n"
-        "📸 **تحميل صور يوتيوب** - `@YouTube_photos_Extractor_bot`\n"
-        "📊 **تحليل بيانات يوتيوب** - `@YouTube_data_analyzer_bot`\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "💰 **الخطة المجانية:**\n"
+        f"🌐 مرحباً بك {first_name} في بوت الأدوات الاجتماعية! 🌐\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"💎 حالتك: {status_text}\n"
+        f"📊 {limit_text}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🎯 ماذا يقدم هذا البوت؟\n"
+        f"هو مركز التحكم الرئيسي لجميع بوتاتي المتخصصة في تحميل وتحليل محتوى يوتيوب.\n\n"
+        f"📱 البوتات المتاحة:\n\n"
+        f"🎬 استخراج روابط يوتيوب\n"
+        f"📸 تحميل صور يوتيوب\n"
+        f"📊 تحليل بيانات يوتيوب\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"💰 الخطة المجانية:\n"
         f"• {FREE_LIMIT} عملية يومياً لكل بوت\n\n"
-        "💎 **الخطة المميزة (10 دولار مدى الحياة):**\n"
-        "• استخدام غير محدود لجميع البوتات\n"
-        "• دعم أولوية في المعالجة\n"
-        "• تحديثات حصرية أولاً\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "📌 **كيف تستخدم البوت؟**\n"
-        "• اضغط على زر 🎬 البوتات المتاحة\n"
-        "• أو استخدم الأزرار أدناه للانتقال مباشرة\n\n"
-        "👨‍💻 **المطور:** @E_Alshabany"
+        f"💎 الخطة المميزة (10 دولار مدى الحياة):\n"
+        f"• استخدام غير محدود لجميع البوتات\n"
+        f"• دعم أولوية في المعالجة\n"
+        f"• تحديثات حصرية أولاً\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"📌 كيف تستخدم البوت؟\n"
+        f"• اضغط على زر 🎬 البوتات المتاحة\n"
+        f"• أو استخدم الأزرار أدناه للانتقال مباشرة\n\n"
+        f"👨‍💻 المطور: @E_Alshabany"
     )
-    await update.message.reply_text(welcome_text, parse_mode='Markdown', reply_markup=get_main_keyboard())
+    await update.message.reply_text(welcome_text, reply_markup=get_main_keyboard())
 
 async def my_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """عرض إحصائيات المستخدم الشخصية"""
     user_id = update.effective_user.id
     user_info = get_user_info(user_id)
     first_name = update.effective_user.first_name
@@ -246,20 +221,20 @@ async def my_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status = user_info['status']
     
     if status == 'premium':
-        status_text = "👑 **مميز**"
-        limit_text = "✅ **جميع البوتات: غير محدود**"
+        status_text = "مميز"
+        limit_text = "جميع البوتات: غير محدود"
     else:
-        status_text = "🎁 **مجاني**"
-        limit_text = f"📊 **الحد اليومي:** {FREE_LIMIT} عملية لكل بوت"
+        status_text = "مجاني"
+        limit_text = f"الحد اليومي: {FREE_LIMIT} عملية لكل بوت"
     
     stats_text = (
-        f"📊 **إحصائياتك الشخصية**\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 **المستخدم:** {first_name}\n"
-        f"💎 **نوع الخطة:** {status_text}\n"
-        f"{limit_text}\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        "📱 **استخدامات اليوم:**\n\n"
+        f"📊 إحصائياتك الشخصية\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 المستخدم: {first_name}\n"
+        f"💎 نوع الخطة: {status_text}\n"
+        f"📊 {limit_text}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📱 استخدامات اليوم:\n\n"
     )
     
     for bot_id, bot_info in sorted(BOTS.items(), key=lambda x: x[1]['order']):
@@ -268,20 +243,16 @@ async def my_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         daily_uses = usage_data.get('daily_uses', 0)
         
         if remaining == -1:
-            usage_line = f"{bot_info['icon']} {bot_info['name']}: **غير محدود** ✅"
+            stats_text += f"{bot_info['icon']} {bot_info['name']}: غير محدود ✅\n"
         else:
-            usage_line = f"{bot_info['icon']} {bot_info['name']}: {daily_uses}/{FREE_LIMIT} (متبقي {remaining})"
-        
-        stats_text += f"{usage_line}\n"
+            stats_text += f"{bot_info['icon']} {bot_info['name']}: {daily_uses}/{FREE_LIMIT} (متبقي {remaining})\n"
     
-    stats_text += "\n━━━━━━━━━━━━━━━━━━━━\n💎 **للاشتراك المميز:** اضغط زر 💎 اشتراك مميز"
-    await update.message.reply_text(stats_text, parse_mode='Markdown', reply_markup=get_main_keyboard())
+    stats_text += "\n━━━━━━━━━━━━━━━━━━━━\n💎 للاشتراك المميز: اضغط زر 💎 اشتراك مميز"
+    await update.message.reply_text(stats_text, reply_markup=get_main_keyboard())
 
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """عرض معلومات الاشتراك المميز"""
     user_id = update.effective_user.id
     user_info = get_user_info(user_id)
-    first_name = update.effective_user.first_name
     
     if user_info and user_info['status'] == 'premium':
         premium_until = user_info.get('premium_until', '')
@@ -291,94 +262,88 @@ async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             expiry = "مدى الحياة"
         
         text = (
-            f"👑 **أنت مشترك في الخطة المميزة!**\n\n"
-            f"✅ **مميزات الاشتراك المميز:**\n"
+            f"👑 أنت مشترك في الخطة المميزة!\n\n"
+            f"✅ مميزات الاشتراك المميز:\n"
             f"• استخدام غير محدود لجميع البوتات\n"
             f"• دعم أولوية في المعالجة\n"
             f"• تحديثات حصرية أولاً\n\n"
-            f"📅 **الاشتراك نشط حتى:** {expiry}\n\n"
+            f"📅 الاشتراك نشط حتى: {expiry}\n\n"
             f"شكراً لدعمك! 🙏"
         )
-        await update.message.reply_text(text, parse_mode='Markdown', reply_markup=get_main_keyboard())
+        await update.message.reply_text(text, reply_markup=get_main_keyboard())
     else:
         text = (
-            f"💎 **الاشتراك المميز**\n\n"
-            f"🎁 **مميزات الخطة المميزة:**\n"
+            f"💎 الاشتراك المميز\n\n"
+            f"🎁 مميزات الخطة المميزة:\n"
             f"• ✅ استخدام غير محدود لجميع البوتات\n"
             f"• ✅ دعم أولوية في المعالجة\n"
             f"• ✅ تحديثات حصرية أولاً\n\n"
-            f"💰 **السعر:**\n"
-            f"• **10 دولار مدى الحياة**\n\n"
-            f"📊 **حالتك الحالية:**\n"
+            f"💰 السعر:\n"
+            f"• 10 دولار مدى الحياة\n\n"
+            f"📊 حالتك الحالية:\n"
             f"• نوع الخطة: مجانية\n"
             f"• الحد اليومي: {FREE_LIMIT} عملية لكل بوت\n\n"
-            f"🔽 **للاشتراك، اضغط على الزر أدناه:**"
+            f"🔽 للاشتراك، اضغط على الزر أدناه:"
         )
-        await update.message.reply_text(text, parse_mode='Markdown', reply_markup=get_premium_inline_keyboard())
+        await update.message.reply_text(text, reply_markup=get_premium_inline_keyboard())
 
 async def available_bots_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """عرض البوتات المتاحة"""
-    text = "🎬 **البوتات المتاحة**\n\n📌 اضغط على أي بوت للانتقال مباشرة:\n"
-    await update.message.reply_text(text, parse_mode='Markdown', reply_markup=get_bots_inline_keyboard())
+    text = "🎬 البوتات المتاحة\n\n📌 اضغط على أي بوت للانتقال مباشرة:"
+    await update.message.reply_text(text, reply_markup=get_bots_inline_keyboard())
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تعليمات المساعدة"""
     help_text = (
-        f"🆘 **مساعدة بوت الأدوات الاجتماعية**\n\n"
-        f"🔹 **ماذا يمكنني أن أفعل؟**\n"
+        f"🆘 مساعدة بوت الأدوات الاجتماعية\n\n"
+        f"🔹 ماذا يمكنني أن أفعل؟\n"
         f"• 🎬 عرض جميع البوتات المتاحة\n"
         f"• 📊 عرض إحصائياتي الشخصية\n"
         f"• 💎 الاشتراك المميز\n\n"
-        f"🔹 **نظام الاستخدام:**\n"
+        f"🔹 نظام الاستخدام:\n"
         f"• الخطة المجانية: {FREE_LIMIT} عملية يومياً لكل بوت\n"
         f"• الخطة المميزة: استخدام غير محدود لجميع البوتات\n\n"
-        f"🔹 **كيف أستخدم البوتات؟**\n"
+        f"🔹 كيف أستخدم البوتات؟\n"
         f"1. اضغط على زر 🎬 البوتات المتاحة\n"
         f"2. اختر البوت الذي تريده\n"
         f"3. استخدم البوت مباشرة\n\n"
-        f"📋 **الأوامر:**\n"
+        f"📋 الأوامر:\n"
         f"/start - بدء الاستخدام\n"
         f"/help - هذه المساعدة\n"
         f"/mystats - إحصائياتي الشخصية\n"
         f"/premium - الاشتراك المميز\n\n"
-        f"👨‍💻 **المطور:** @E_Alshabany"
+        f"👨‍💻 المطور: @E_Alshabany"
     )
-    await update.message.reply_text(help_text, parse_mode='Markdown', reply_markup=get_main_keyboard())
+    await update.message.reply_text(help_text, reply_markup=get_main_keyboard())
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معلومات عن البوت"""
     about_text = (
-        f"🌐 **بوت الأدوات الاجتماعية - Social Media Tools Hub**\n\n"
-        f"🎯 **الإصدار:** 2.0 (مركز التحكم الرئيسي)\n\n"
-        f"✨ **الرؤية:**\n"
+        f"🌐 بوت الأدوات الاجتماعية - Social Media Tools Hub\n\n"
+        f"🎯 الإصدار: 2.0 (مركز التحكم الرئيسي)\n\n"
+        f"✨ الرؤية:\n"
         f"مركز واحد يجمع جميع أدوات تحميل وتحليل محتوى منصات التواصل الاجتماعي.\n\n"
-        f"✅ **المميزات:**\n"
+        f"✅ المميزات:\n"
         f"• واجهة موحدة للوصول لجميع البوتات\n"
         f"• نظام اشتراك موحد لجميع البوتات\n"
         f"• إحصائيات شخصية لحالة استخدامك\n"
         f"• تحديثات مستمرة بإضافة بوتات جديدة\n\n"
-        f"📱 **البوتات الحالية:**\n"
+        f"📱 البوتات الحالية:\n"
         f"• 📊 بوت تحليل يوتيوب\n"
         f"• 🎬 بوت استخراج روابط يوتيوب\n"
         f"• 📸 بوت تحميل صور يوتيوب\n\n"
-        f"💰 **نظام الاشتراك:**\n"
+        f"💰 نظام الاشتراك:\n"
         f"• مجاني: {FREE_LIMIT} عملية يومياً لكل بوت\n"
         f"• مميز: 10 دولار مدى الحياة - استخدام غير محدود\n\n"
-        f"👨‍💻 **المطور:** @E_Alshabany\n"
-        f"🚀 **تم النشر على Render - 2026**"
+        f"👨‍💻 المطور: @E_Alshabany\n"
+        f"🚀 تم النشر على Render - 2026"
     )
-    await update.message.reply_text(about_text, parse_mode='Markdown', reply_markup=get_main_keyboard())
+    await update.message.reply_text(about_text, reply_markup=get_main_keyboard())
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة الأزرار المضمنة"""
     query = update.callback_query
     await query.answer()
-    
     if query.data == "main_menu":
         await start_command(update, context)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة رسائل المستخدم"""
     text = update.message.text.strip()
     
     if text == "🎬 البوتات المتاحة":
@@ -391,13 +356,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await help_command(update, context)
     else:
         await update.message.reply_text(
-            "❓ **عذراً، لم أتعرف على طلبك.**\n\n"
+            "❓ عذراً، لم أتعرف على طلبك.\n\n"
             "📌 يمكنك استخدام الأزرار أدناه أو إرسال /help للمساعدة.",
-            parse_mode='Markdown',
             reply_markup=get_main_keyboard()
         )
 
-# ========== Flask Routes (يجب أن تكون قبل تشغيل Flask) ==========
+# ========== Flask Routes ==========
 
 app = Flask(__name__)
 
@@ -409,12 +373,10 @@ def health():
 
 @app.route('/payment')
 def payment_page():
-    """صفحة الدفع الموحدة"""
     return render_template('payment.html', free_limit=FREE_LIMIT)
 
 @app.route('/admin')
 def admin_panel():
-    """لوحة الإدارة المركزية"""
     auth = request.authorization
     if not auth or auth.password != ADMIN_PASSWORD:
         return '🔒 يرجى إدخال كلمة المرور', 401, {'WWW-Authenticate': 'Basic realm="Admin Panel"'}
@@ -467,7 +429,6 @@ def admin_panel():
 
 @app.route('/upgrade-user', methods=['POST'])
 def upgrade_user():
-    """ترقية مستخدم إلى مميز"""
     auth = request.authorization
     if not auth or auth.password != ADMIN_PASSWORD:
         return 'Unauthorized', 401
@@ -487,7 +448,6 @@ def upgrade_user():
 
 @app.route('/downgrade-user', methods=['POST'])
 def downgrade_user():
-    """خفض مستخدم إلى مجاني"""
     auth = request.authorization
     if not auth or auth.password != ADMIN_PASSWORD:
         return 'Unauthorized', 401
@@ -506,7 +466,6 @@ def downgrade_user():
 
 @app.route('/reset-daily')
 def reset_daily_endpoint():
-    """Endpoint لإعادة تعيين الاستخدامات اليومية"""
     try:
         supabase.rpc('reset_daily_usage').execute()
         return "Daily usage reset completed", 200
@@ -514,7 +473,7 @@ def reset_daily_endpoint():
         logger.error(f"Reset daily error: {e}")
         return f"Error: {e}", 500
 
-# ========== تشغيل Flask في Thread ==========
+# ========== تشغيل Flask ==========
 PORT = int(os.environ.get('PORT', 10000))
 
 def run_flask():
@@ -522,10 +481,9 @@ def run_flask():
 
 threading.Thread(target=run_flask, daemon=True).start()
 
-# ========== الدالة الرئيسية للبوت ==========
+# ========== الدالة الرئيسية ==========
 
 def main():
-    """تشغيل البوت"""
     application = Application.builder().token(TELEGRAM_TOKEN).build()
     
     application.add_handler(CommandHandler("start", start_command))
