@@ -643,7 +643,7 @@ def admin_panel():
     
     except Exception as e:
         logger.error(f"Admin panel error: {e}")
-        return f"خطأ: {e}", 500
+        return f"خطأ في لوحة التحكم: {str(e)}", 500
 
 @app.route('/upgrade-user', methods=['POST'])
 def upgrade_user():
