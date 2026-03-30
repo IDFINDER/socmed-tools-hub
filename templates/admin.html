@@ -40,7 +40,7 @@
         .stat-number { font-size: 2rem; font-weight: bold; color: #667eea; }
         .stat-label { color: #6c757d; font-size: 0.85rem; margin-top: 5px; }
         
-        /* قسم الرسوم البيانية */
+        /* الرسوم البيانية */
         .charts-section {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
@@ -61,6 +61,54 @@
             padding-right: 12px;
         }
         .chart-container { position: relative; height: 280px; }
+        
+        /* شريط البحث */
+        .search-section {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .search-box {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .search-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+        }
+        .search-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .search-btn:hover { background: #5a67d8; transform: scale(1.02); }
+        .clear-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .clear-btn:hover { background: #5a6268; transform: scale(1.02); }
         
         /* جدول المستخدمين */
         .users-section {
@@ -88,36 +136,6 @@
             transition: all 0.2s;
         }
         .refresh-btn:hover { background: #5a67d8; transform: scale(1.02); }
-        
-        /* جدول الإحصائيات اليومية */
-        .daily-stats-section {
-            background: white;
-            border-radius: 20px;
-            padding: 20px;
-            margin-bottom: 30px;
-            overflow-x: auto;
-        }
-        .daily-stats-section h3 {
-            margin-bottom: 15px;
-            color: #2c3e50;
-            border-right: 3px solid #667eea;
-            padding-right: 12px;
-        }
-        .daily-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .daily-table th, .daily-table td {
-            padding: 12px;
-            text-align: center;
-            border-bottom: 1px solid #e9ecef;
-        }
-        .daily-table th {
-            background: #f8f9fa;
-            color: #495057;
-            font-weight: 600;
-        }
-        .daily-table tr:hover { background: #f8f9fa; }
         
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 12px; text-align: center; border-bottom: 1px solid #e9ecef; }
@@ -167,10 +185,13 @@
         }
         .downgrade-btn:hover { background: #c82333; transform: scale(1.02); }
         .footer { text-align: center; margin-top: 30px; padding: 20px; color: #6c757d; font-size: 0.8rem; border-top: 1px solid #e9ecef; }
+        .no-results { text-align: center; padding: 40px; color: #6c757d; }
         
         @media (max-width: 768px) {
             .charts-section { grid-template-columns: 1fr; }
             th, td { font-size: 0.75rem; padding: 8px; }
+            .search-box { flex-direction: column; }
+            .search-btn, .clear-btn { width: 100%; }
         }
     </style>
 </head>
@@ -205,75 +226,67 @@
             </div>
         </div>
         
-        <!-- إحصائيات آخر 7 أيام -->
-        <div class="daily-stats-section">
-            <h3>📅 إحصائيات آخر 7 أيام</h3>
-            <table class="daily-table">
-                <thead>
-                    <tr>
-                        <th>التاريخ</th>
-                        <th>📸 بوت الصور</th>
-                        <th>🎬 بوت الروابط</th>
-                        <th>📊 بوت التحليل</th>
-                        <th>المجموع اليومي</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for day in daily_stats %}
-                    <tr>
-                        <td>{{ day.date }}</td>
-                        <td><span class="usage-badge">{{ day.thumbnail }}</span></td>
-                        <td><span class="usage-badge">{{ day.playlist }}</span></td>
-                        <td><span class="usage-badge">{{ day.analyzer }}</span></td>
-                        <td><strong>{{ day.total }}</strong></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        
-        <!-- قائمة المستخدمين -->
+        <!-- قائمة المستخدمين مع شريط البحث -->
         <div class="users-section">
             <div class="section-header">
                 <h2>📋 قائمة المستخدمين</h2>
                 <button class="refresh-btn" onclick="location.reload()">🔄 تحديث</button>
             </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>المعرف</th>
-                        <th>الاسم</th>
-                        <th>اليوزرنيم</th>
-                        <th>الحالة</th>
-                        <th>ينتهي في</th>
-                        <th>📸 الصور</th>
-                        <th>🎬 الروابط</th>
-                        <th>📊 التحليل</th>
-                        <th>الإجراء</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for user in users %}
-                    <tr>
-                        <td>{{ user.user_id }}</td>
-                        <td>{{ user.first_name }}</td>
-                        <td>@{{ user.username }}</td>
-                        <td>{% if user.status == 'premium' %}<span class="premium-badge">👑 مميز</span>{% else %}<span class="free-badge">🎁 مجاني</span>{% endif %}</td>
-                        <td>{{ user.premium_until or '-' }}</td>
-                        <td><span class="usage-badge">{{ user.usage.thumbnail|default(0) }}/{{ free_limit }}</span></td>
-                        <td><span class="usage-badge">{{ user.usage.playlist|default(0) }}/{{ free_limit }}</span></td>
-                        <td><span class="usage-badge">{{ user.usage.analyzer|default(0) }}/{{ free_limit }}</span></td>
-                        <td>
-                            {% if user.status == 'free' %}
-                                <form method="POST" action="/upgrade-user" style="display:inline;"><input type="hidden" name="user_id" value="{{ user.user_id }}"><button type="submit" class="upgrade-btn">⭐ ترقية</button></form>
-                            {% else %}
-                                <form method="POST" action="/downgrade-user" style="display:inline;"><input type="hidden" name="user_id" value="{{ user.user_id }}"><button type="submit" class="downgrade-btn">📉 خفض</button></form>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            
+            <!-- شريط البحث -->
+            <div class="search-section">
+                <div class="search-box">
+                    <input type="text" id="searchInput" class="search-input" placeholder="🔍 بحث بالاسم أو المعرف أو اليوزرنيم..." onkeyup="filterUsers()">
+                    <button class="search-btn" onclick="filterUsers()">🔍 بحث</button>
+                    <button class="clear-btn" onclick="clearSearch()">🗑️ مسح</button>
+                </div>
+            </div>
+            
+            <div style="overflow-x: auto;">
+                <table id="usersTable">
+                    <thead>
+                        <tr>
+                            <th>المعرف</th>
+                            <th>الاسم</th>
+                            <th>اليوزرنيم</th>
+                            <th>الحالة</th>
+                            <th>ينتهي في</th>
+                            <th>📸 الصور</th>
+                            <th>🎬 الروابط</th>
+                            <th>📊 التحليل</th>
+                            <th>الإجراء</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr data-user-id="{{ user.user_id }}" data-name="{{ user.first_name }}" data-username="{{ user.username }}">
+                            <td>{{ user.user_id }}</td>
+                            <td>{{ user.first_name }}</td>
+                            <td>@{{ user.username }}</td>
+                            <td>{% if user.status == 'premium' %}<span class="premium-badge">👑 مميز</span>{% else %}<span class="free-badge">🎁 مجاني</span>{% endif %}</td>
+                            <td>{{ user.premium_until or '-' }}</td>
+                            <td><span class="usage-badge">{{ user.usage.thumbnail|default(0) }}/{{ free_limit }}</span></td>
+                            <td><span class="usage-badge">{{ user.usage.playlist|default(0) }}/{{ free_limit }}</span></td>
+                            <td><span class="usage-badge">{{ user.usage.analyzer|default(0) }}/{{ free_limit }}</span></td>
+                            <td>
+                                {% if user.status == 'free' %}
+                                    <form method="POST" action="/upgrade-user" style="display:inline;">
+                                        <input type="hidden" name="user_id" value="{{ user.user_id }}">
+                                        <button type="submit" class="upgrade-btn">⭐ ترقية</button>
+                                    </form>
+                                {% else %}
+                                    <form method="POST" action="/downgrade-user" style="display:inline;">
+                                        <input type="hidden" name="user_id" value="{{ user.user_id }}">
+                                        <button type="submit" class="downgrade-btn">📉 خفض</button>
+                                    </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <div id="noResults" class="no-results" style="display: none;">❌ لا توجد نتائج مطابقة للبحث</div>
+            </div>
         </div>
         
         <div class="footer">
@@ -341,6 +354,45 @@
                     y: { beginAtZero: true, grid: { color: '#e9ecef' }, title: { display: true, text: 'عدد الاستخدامات', font: { size: 11 } } },
                     x: { grid: { display: false }, title: { display: true, text: 'البوتات', font: { size: 11 } } }
                 }
+            }
+        });
+        
+        // وظيفة البحث
+        function filterUsers() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+            const rows = document.querySelectorAll('#usersTable tbody tr');
+            let hasResults = false;
+            
+            rows.forEach(row => {
+                const userId = row.getAttribute('data-user-id')?.toLowerCase() || '';
+                const name = row.getAttribute('data-name')?.toLowerCase() || '';
+                const username = row.getAttribute('data-username')?.toLowerCase() || '';
+                const rowText = `${userId} ${name} ${username}`;
+                
+                if (searchTerm === '' || rowText.includes(searchTerm)) {
+                    row.style.display = '';
+                    hasResults = true;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            
+            const noResultsDiv = document.getElementById('noResults');
+            if (noResultsDiv) {
+                noResultsDiv.style.display = hasResults ? 'none' : 'block';
+            }
+        }
+        
+        // وظيفة مسح البحث
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            filterUsers();
+        }
+        
+        // البحث عند الضغط على Enter
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                filterUsers();
             }
         });
     </script>
