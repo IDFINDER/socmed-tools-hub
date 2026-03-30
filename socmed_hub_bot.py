@@ -19,6 +19,7 @@ SUPABASE_KEY = os.environ.get('SUPABASE_ANON_KEY')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'alshabany#772130900')
 FREE_LIMIT = int(os.environ.get('FREE_LIMIT', '5'))
 RENDER_URL = os.environ.get('RENDER_URL', 'socmed-tools-hub-xprw.onrender.com')
+SYSTEM_BOT_NAME = os.environ.get('SYSTEM_BOT_NAME', 'system')  # اسم البوت الرئيسي في قاعدة البيانات
 
 if not TELEGRAM_TOKEN or not SUPABASE_URL or not SUPABASE_KEY:
     print("❌ خطأ: تأكد من تعيين المتغيرات المطلوبة")
@@ -59,12 +60,28 @@ BOTS = {
 # ========== دوال قاعدة البيانات ==========
 
 def get_or_create_user(user_id, first_name, username, language_code):
+    """
+    إنشاء أو تحديث مستخدم في جدول users.
+    ينشئ سجل في bot_usage فقط للبوت الرئيسي (system)
+    البوتات الأخرى (thumbnail, playlist, analyzer) تنشئ سجلاتها بنفسها عند الاستخدام
+    """
     try:
+        # البحث عن المستخدم في جدول users
         response = supabase.table('users').select('*').eq('user_id', user_id).execute()
         
         if response.data:
             user = response.data[0]
+            # تحديث معلومات المستخدم إذا تغيرت
+            if user.get('first_name') != first_name or user.get('username') != username:
+                supabase.table('users').update({
+                    'first_name': first_name,
+                    'username': username or '',
+                    'language_code': language_code or ''
+                }).eq('user_id', user_id).execute()
+                user['first_name'] = first_name
+                user['username'] = username
         else:
+            # إنشاء مستخدم جديد
             new_user = {
                 'user_id': user_id,
                 'first_name': first_name,
@@ -75,22 +92,31 @@ def get_or_create_user(user_id, first_name, username, language_code):
             response = supabase.table('users').insert(new_user).execute()
             user = response.data[0]
         
+        # إنشاء سجل للبوت الرئيسي (system) فقط إذا لم يكن موجوداً
+        system_usage = supabase.table('bot_usage').select('*').eq('user_id', user_id).eq('bot_name', SYSTEM_BOT_NAME).execute()
+        if not system_usage.data:
+            supabase.table('bot_usage').insert({
+                'user_id': user_id,
+                'bot_name': SYSTEM_BOT_NAME,
+                'daily_uses': 0,
+                'total_uses': 0,
+                'last_use_date': date.today().isoformat(),
+                'username': username or '',
+                'first_name': first_name
+            }).execute()
+        
+        # جلب استخدامات البوتات الأخرى (موجودة أو لا)
         usage_data = {}
         for bot_id in BOTS.keys():
             usage = supabase.table('bot_usage').select('*').eq('user_id', user_id).eq('bot_name', bot_id).execute()
-            if not usage.data:
-                supabase.table('bot_usage').insert({
-                    'user_id': user_id,
-                    'bot_name': bot_id,
-                    'daily_uses': 0,
-                    'total_uses': 0,
-                    'last_use_date': date.today().isoformat(),
-                    'username': username or '',
-                    'first_name': first_name
-                }).execute()
-                usage_data[bot_id] = {'daily_uses': 0, 'total_uses': 0}
-            else:
+            if usage.data:
                 usage_data[bot_id] = usage.data[0]
+            else:
+                usage_data[bot_id] = {'daily_uses': 0, 'total_uses': 0}
+        
+        # إضافة استخدام البوت الرئيسي (system)
+        system_usage_data = supabase.table('bot_usage').select('*').eq('user_id', user_id).eq('bot_name', SYSTEM_BOT_NAME).execute()
+        usage_data[SYSTEM_BOT_NAME] = system_usage_data.data[0] if system_usage_data.data else {'daily_uses': 0, 'total_uses': 0}
         
         return {
             'user_id': user['user_id'],
@@ -106,17 +132,22 @@ def get_or_create_user(user_id, first_name, username, language_code):
         return None
 
 def get_user_info(user_id):
+    """جلب معلومات المستخدم مع استخداماته الموجودة فقط"""
     try:
         response = supabase.table('users').select('*').eq('user_id', user_id).execute()
         if response.data:
             user = response.data[0]
             usage_data = {}
+            # استخدامات البوتات الفعلية (thumbnail, playlist, analyzer)
             for bot_id in BOTS.keys():
                 usage = supabase.table('bot_usage').select('*').eq('user_id', user_id).eq('bot_name', bot_id).execute()
                 if usage.data:
                     usage_data[bot_id] = usage.data[0]
                 else:
                     usage_data[bot_id] = {'daily_uses': 0, 'total_uses': 0}
+            # إضافة استخدام البوت الرئيسي (system)
+            system_usage = supabase.table('bot_usage').select('*').eq('user_id', user_id).eq('bot_name', SYSTEM_BOT_NAME).execute()
+            usage_data[SYSTEM_BOT_NAME] = system_usage.data[0] if system_usage.data else {'daily_uses': 0, 'total_uses': 0}
             return {**user, 'usage': usage_data}
         return None
     except Exception as e:
@@ -124,6 +155,10 @@ def get_user_info(user_id):
         return None
 
 def get_remaining_for_bot(user_id, bot_id):
+    """حساب الاستخدامات المتبقية للمستخدم لبوت معين"""
+    # إذا كان البوت المطلوب هو البوت الرئيسي (system) -> لا حدود
+    if bot_id == SYSTEM_BOT_NAME:
+        return -1  # غير محدود
     user = get_user_info(user_id)
     if not user:
         return FREE_LIMIT
@@ -384,66 +419,35 @@ def admin_panel():
         return '🔒 يرجى إدخال كلمة المرور', 401, {'WWW-Authenticate': 'Basic realm="Admin Panel"'}
     
     try:
-        # جلب جميع البيانات
+        # جلب جميع المستخدمين
         users = supabase.table('users').select('*').execute()
         
-        # جلب استخدامات جميع البوتات (بجميع الأسماء الممكنة)
-        # بوت الصور
-        bot_usage_thumbnail_1 = supabase.table('bot_usage').select('*').eq('bot_name', 'thumbnail').execute()
-        bot_usage_thumbnail_2 = supabase.table('bot_usage').select('*').eq('bot_name', 'youtube-photos-extractor').execute()
-        bot_usage_thumbnail = bot_usage_thumbnail_1.data + bot_usage_thumbnail_2.data
+        # جلب استخدامات البوتات بالأسماء الجديدة فقط (thumbnail, playlist, analyzer)
+        # ملاحظة: لا نعرض استخدامات البوت الرئيسي (system) في لوحة الإدارة
+        bot_usage_thumbnail = supabase.table('bot_usage').select('*').eq('bot_name', 'thumbnail').execute()
+        bot_usage_playlist = supabase.table('bot_usage').select('*').eq('bot_name', 'playlist').execute()
+        bot_usage_analyzer = supabase.table('bot_usage').select('*').eq('bot_name', 'analyzer').execute()
         
-        # بوت الروابط
-        bot_usage_playlist_1 = supabase.table('bot_usage').select('*').eq('bot_name', 'playlist').execute()
-        bot_usage_playlist_2 = supabase.table('bot_usage').select('*').eq('bot_name', 'YouTube_Playlist_Extractor').execute()
-        bot_usage_playlist = bot_usage_playlist_1.data + bot_usage_playlist_2.data
-        
-        # بوت التحليل
-        bot_usage_analyzer_1 = supabase.table('bot_usage').select('*').eq('bot_name', 'analyzer').execute()
-        bot_usage_analyzer_2 = supabase.table('bot_usage').select('*').eq('bot_name', 'youtube_analyzer').execute()
-        bot_usage_analyzer = bot_usage_analyzer_1.data + bot_usage_analyzer_2.data
-        
-        # طباعة في السجل للتحقق
-        logger.info(f"Thumbnail count: {len(bot_usage_thumbnail)}")
-        logger.info(f"Playlist count: {len(bot_usage_playlist)}")
-        logger.info(f"Analyzer count: {len(bot_usage_analyzer)}")
-        
-        # إنشاء قواميس للاستخدامات (دمج البيانات - أخذ أحدث سجل لكل مستخدم)
-        usage_thumbnail_dict = {}
-        usage_playlist_dict = {}
-        usage_analyzer_dict = {}
-        
-        for u in bot_usage_thumbnail:
-            uid = u['user_id']
-            if uid not in usage_thumbnail_dict or u.get('last_use_date') > usage_thumbnail_dict[uid].get('last_use_date', ''):
-                usage_thumbnail_dict[uid] = u
-        
-        for u in bot_usage_playlist:
-            uid = u['user_id']
-            if uid not in usage_playlist_dict or u.get('last_use_date') > usage_playlist_dict[uid].get('last_use_date', ''):
-                usage_playlist_dict[uid] = u
-        
-        for u in bot_usage_analyzer:
-            uid = u['user_id']
-            if uid not in usage_analyzer_dict or u.get('last_use_date') > usage_analyzer_dict[uid].get('last_use_date', ''):
-                usage_analyzer_dict[uid] = u
+        # إنشاء قواميس للاستخدامات
+        usage_thumbnail_dict = {u['user_id']: u for u in bot_usage_thumbnail.data}
+        usage_playlist_dict = {u['user_id']: u for u in bot_usage_playlist.data}
+        usage_analyzer_dict = {u['user_id']: u for u in bot_usage_analyzer.data}
         
         # إحصائيات إجمالية
-        total_uses_photos = sum(u.get('total_uses', 0) for u in bot_usage_thumbnail)
-        total_uses_playlist = sum(u.get('total_uses', 0) for u in bot_usage_playlist)
-        total_uses_analyzer = sum(u.get('total_uses', 0) for u in bot_usage_analyzer)
+        total_uses_photos = sum(u.get('total_uses', 0) for u in bot_usage_thumbnail.data)
+        total_uses_playlist = sum(u.get('total_uses', 0) for u in bot_usage_playlist.data)
+        total_uses_analyzer = sum(u.get('total_uses', 0) for u in bot_usage_analyzer.data)
         
         # ========== إحصائيات آخر 7 أيام ==========
         today = date.today()
         daily_stats = []
-        
         for i in range(6, -1, -1):
             target_date = today - timedelta(days=i)
             date_str = target_date.strftime('%Y-%m-%d')
             
-            thumbnail_daily = sum(1 for u in bot_usage_thumbnail if u.get('last_use_date') == date_str)
-            playlist_daily = sum(1 for u in bot_usage_playlist if u.get('last_use_date') == date_str)
-            analyzer_daily = sum(1 for u in bot_usage_analyzer if u.get('last_use_date') == date_str)
+            thumbnail_daily = sum(1 for u in bot_usage_thumbnail.data if u.get('last_use_date') == date_str)
+            playlist_daily = sum(1 for u in bot_usage_playlist.data if u.get('last_use_date') == date_str)
+            analyzer_daily = sum(1 for u in bot_usage_analyzer.data if u.get('last_use_date') == date_str)
             
             daily_stats.append({
                 'date': target_date.strftime('%d/%m/%Y'),
@@ -463,9 +467,9 @@ def admin_panel():
             usage_playlist = usage_playlist_dict.get(user['user_id'], {})
             usage_analyzer = usage_analyzer_dict.get(user['user_id'], {})
             
-            # استخدام الاسم من bot_usage (المخزن مع كل استخدام)
-            first_name = usage_thumbnail.get('first_name') or usage_playlist.get('first_name') or usage_analyzer.get('first_name') or user.get('first_name', '-')
-            username = usage_thumbnail.get('username') or usage_playlist.get('username') or usage_analyzer.get('username') or user.get('username', '-')
+            # استخدام الاسم من جدول users (المصدر الأساسي)
+            first_name = user.get('first_name', '-')
+            username = user.get('username', '-')
             
             daily_thumbnail = usage_thumbnail.get('daily_uses', 0)
             daily_playlist = usage_playlist.get('daily_uses', 0)
@@ -489,16 +493,16 @@ def admin_panel():
                 }
             })
         
-        # عدد النشطاء اليوم
+        # عدد النشطاء اليوم (من البوتات الفعلية فقط)
         today_str = str(date.today())
         active_users = set()
-        for u in bot_usage_thumbnail:
+        for u in bot_usage_thumbnail.data:
             if u.get('last_use_date') == today_str:
                 active_users.add(u['user_id'])
-        for u in bot_usage_playlist:
+        for u in bot_usage_playlist.data:
             if u.get('last_use_date') == today_str:
                 active_users.add(u['user_id'])
-        for u in bot_usage_analyzer:
+        for u in bot_usage_analyzer.data:
             if u.get('last_use_date') == today_str:
                 active_users.add(u['user_id'])
         
@@ -594,6 +598,7 @@ def main():
     print(f"✅ نظام الاشتراك: مجاني {FREE_LIMIT} عملية/بوت - مميز غير محدود")
     print("✅ صفحة الدفع: /payment")
     print("✅ لوحة الإدارة: /admin")
+    print(f"✅ اسم البوت في قاعدة البيانات: {SYSTEM_BOT_NAME}")
     print("="*60)
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)
