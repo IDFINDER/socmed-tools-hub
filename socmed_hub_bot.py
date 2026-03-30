@@ -17,9 +17,11 @@ TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 SUPABASE_URL = os.environ.get('SUPABASE_URL')
 SUPABASE_KEY = os.environ.get('SUPABASE_ANON_KEY')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'alshabany#772130900')
+ADMIN_USERNAMES = os.environ.get('ADMIN_USERNAMES', 'E_Alshabany').split(',')
+ADMIN_USERNAMES = [u.strip() for u in ADMIN_USERNAMES]  # إزالة المسافات
 FREE_LIMIT = int(os.environ.get('FREE_LIMIT', '5'))
 RENDER_URL = os.environ.get('RENDER_URL', 'socmed-tools-hub-xprw.onrender.com')
-SYSTEM_BOT_NAME = os.environ.get('SYSTEM_BOT_NAME', 'system')  # اسم البوت الرئيسي في قاعدة البيانات
+SYSTEM_BOT_NAME = os.environ.get('SYSTEM_BOT_NAME', 'system')
 
 if not TELEGRAM_TOKEN or not SUPABASE_URL or not SUPABASE_KEY:
     print("❌ خطأ: تأكد من تعيين المتغيرات المطلوبة")
@@ -63,15 +65,12 @@ def get_or_create_user(user_id, first_name, username, language_code):
     """
     إنشاء أو تحديث مستخدم في جدول users.
     ينشئ سجل في bot_usage فقط للبوت الرئيسي (system)
-    البوتات الأخرى (thumbnail, playlist, analyzer) تنشئ سجلاتها بنفسها عند الاستخدام
     """
     try:
-        # البحث عن المستخدم في جدول users
         response = supabase.table('users').select('*').eq('user_id', user_id).execute()
         
         if response.data:
             user = response.data[0]
-            # تحديث معلومات المستخدم إذا تغيرت
             if user.get('first_name') != first_name or user.get('username') != username:
                 supabase.table('users').update({
                     'first_name': first_name,
@@ -81,7 +80,6 @@ def get_or_create_user(user_id, first_name, username, language_code):
                 user['first_name'] = first_name
                 user['username'] = username
         else:
-            # إنشاء مستخدم جديد
             new_user = {
                 'user_id': user_id,
                 'first_name': first_name,
@@ -105,7 +103,7 @@ def get_or_create_user(user_id, first_name, username, language_code):
                 'first_name': first_name
             }).execute()
         
-        # جلب استخدامات البوتات الأخرى (موجودة أو لا)
+        # جلب استخدامات البوتات الأخرى
         usage_data = {}
         for bot_id in BOTS.keys():
             usage = supabase.table('bot_usage').select('*').eq('user_id', user_id).eq('bot_name', bot_id).execute()
@@ -114,7 +112,7 @@ def get_or_create_user(user_id, first_name, username, language_code):
             else:
                 usage_data[bot_id] = {'daily_uses': 0, 'total_uses': 0}
         
-        # إضافة استخدام البوت الرئيسي (system)
+        # إضافة استخدام البوت الرئيسي
         system_usage_data = supabase.table('bot_usage').select('*').eq('user_id', user_id).eq('bot_name', SYSTEM_BOT_NAME).execute()
         usage_data[SYSTEM_BOT_NAME] = system_usage_data.data[0] if system_usage_data.data else {'daily_uses': 0, 'total_uses': 0}
         
@@ -138,14 +136,12 @@ def get_user_info(user_id):
         if response.data:
             user = response.data[0]
             usage_data = {}
-            # استخدامات البوتات الفعلية (thumbnail, playlist, analyzer)
             for bot_id in BOTS.keys():
                 usage = supabase.table('bot_usage').select('*').eq('user_id', user_id).eq('bot_name', bot_id).execute()
                 if usage.data:
                     usage_data[bot_id] = usage.data[0]
                 else:
                     usage_data[bot_id] = {'daily_uses': 0, 'total_uses': 0}
-            # إضافة استخدام البوت الرئيسي (system)
             system_usage = supabase.table('bot_usage').select('*').eq('user_id', user_id).eq('bot_name', SYSTEM_BOT_NAME).execute()
             usage_data[SYSTEM_BOT_NAME] = system_usage.data[0] if system_usage.data else {'daily_uses': 0, 'total_uses': 0}
             return {**user, 'usage': usage_data}
@@ -156,9 +152,8 @@ def get_user_info(user_id):
 
 def get_remaining_for_bot(user_id, bot_id):
     """حساب الاستخدامات المتبقية للمستخدم لبوت معين"""
-    # إذا كان البوت المطلوب هو البوت الرئيسي (system) -> لا حدود
     if bot_id == SYSTEM_BOT_NAME:
-        return -1  # غير محدود
+        return -1
     user = get_user_info(user_id)
     if not user:
         return FREE_LIMIT
@@ -245,6 +240,26 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👨‍💻 المطور: @E_Alshabany"
     )
     await update.message.reply_text(welcome_text, reply_markup=get_main_keyboard())
+
+async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """أمر مخصص للمطورين لفتح لوحة التحكم"""
+    user = update.effective_user
+    username = user.username
+    
+    if not username:
+        await update.message.reply_text("❌ يرجى تعيين اسم مستخدم (Username) في حسابك أولاً")
+        return
+    
+    if username in ADMIN_USERNAMES:
+        keyboard = [[InlineKeyboardButton("🖥️ فتح لوحة التحكم", web_app=WebAppInfo(url=f"https://{RENDER_URL}/admin"))]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(
+            "🔐 مرحباً بك في لوحة التحكم\n\n"
+            "📌 اضغط على الزر أدناه لفتح لوحة التحكم داخل التطبيق:",
+            reply_markup=reply_markup
+        )
+    else:
+        await update.message.reply_text("⛔ غير مصرح لك بالدخول إلى لوحة التحكم")
 
 async def my_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -345,6 +360,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📋 الأوامر:\n"
         f"/start - بدء الاستخدام\n"
         f"/help - هذه المساعدة\n"
+        f"/about - معلومات عن البوت\n"
         f"/mystats - إحصائياتي الشخصية\n"
         f"/premium - الاشتراك المميز\n\n"
         f"👨‍💻 المطور: @E_Alshabany"
@@ -414,31 +430,41 @@ def payment_page():
 
 @app.route('/admin')
 def admin_panel():
+    # التحقق من المصادقة الأساسية
     auth = request.authorization
-    if not auth or auth.password != ADMIN_PASSWORD:
-        return '🔒 يرجى إدخال كلمة المرور', 401, {'WWW-Authenticate': 'Basic realm="Admin Panel"'}
+    
+    if not auth:
+        return '🔒 يرجى إدخال اسم المستخدم وكلمة المرور', 401, {
+            'WWW-Authenticate': 'Basic realm="Admin Panel"'
+        }
+    
+    # التحقق من كلمة المرور
+    if auth.password != ADMIN_PASSWORD:
+        return '🔒 كلمة المرور غير صحيحة', 401, {
+            'WWW-Authenticate': 'Basic realm="Admin Panel"'
+        }
+    
+    # التحقق من اسم المستخدم (القائمة البيضاء)
+    if auth.username not in ADMIN_USERNAMES:
+        return '⛔ غير مصرح لك بالدخول - اسم المستخدم غير معتمد', 401, {
+            'WWW-Authenticate': 'Basic realm="Admin Panel"'
+        }
     
     try:
-        # جلب جميع المستخدمين
         users = supabase.table('users').select('*').execute()
         
-        # جلب استخدامات البوتات بالأسماء الجديدة فقط (thumbnail, playlist, analyzer)
-        # ملاحظة: لا نعرض استخدامات البوت الرئيسي (system) في لوحة الإدارة
         bot_usage_thumbnail = supabase.table('bot_usage').select('*').eq('bot_name', 'thumbnail').execute()
         bot_usage_playlist = supabase.table('bot_usage').select('*').eq('bot_name', 'playlist').execute()
         bot_usage_analyzer = supabase.table('bot_usage').select('*').eq('bot_name', 'analyzer').execute()
         
-        # إنشاء قواميس للاستخدامات
         usage_thumbnail_dict = {u['user_id']: u for u in bot_usage_thumbnail.data}
         usage_playlist_dict = {u['user_id']: u for u in bot_usage_playlist.data}
         usage_analyzer_dict = {u['user_id']: u for u in bot_usage_analyzer.data}
         
-        # إحصائيات إجمالية
         total_uses_photos = sum(u.get('total_uses', 0) for u in bot_usage_thumbnail.data)
         total_uses_playlist = sum(u.get('total_uses', 0) for u in bot_usage_playlist.data)
         total_uses_analyzer = sum(u.get('total_uses', 0) for u in bot_usage_analyzer.data)
         
-        # ========== إحصائيات آخر 7 أيام ==========
         today = date.today()
         daily_stats = []
         for i in range(6, -1, -1):
@@ -457,7 +483,6 @@ def admin_panel():
                 'total': thumbnail_daily + playlist_daily + analyzer_daily
             })
         
-        # ========== إحصائيات المستخدمين ==========
         users_list = []
         premium_count = 0
         free_count = 0
@@ -467,7 +492,6 @@ def admin_panel():
             usage_playlist = usage_playlist_dict.get(user['user_id'], {})
             usage_analyzer = usage_analyzer_dict.get(user['user_id'], {})
             
-            # استخدام الاسم من جدول users (المصدر الأساسي)
             first_name = user.get('first_name', '-')
             username = user.get('username', '-')
             
@@ -493,7 +517,6 @@ def admin_panel():
                 }
             })
         
-        # عدد النشطاء اليوم (من البوتات الفعلية فقط)
         today_str = str(date.today())
         active_users = set()
         for u in bot_usage_thumbnail.data:
@@ -527,7 +550,7 @@ def admin_panel():
 @app.route('/upgrade-user', methods=['POST'])
 def upgrade_user():
     auth = request.authorization
-    if not auth or auth.password != ADMIN_PASSWORD:
+    if not auth or auth.password != ADMIN_PASSWORD or auth.username not in ADMIN_USERNAMES:
         return 'Unauthorized', 401
     
     try:
@@ -546,7 +569,7 @@ def upgrade_user():
 @app.route('/downgrade-user', methods=['POST'])
 def downgrade_user():
     auth = request.authorization
-    if not auth or auth.password != ADMIN_PASSWORD:
+    if not auth or auth.password != ADMIN_PASSWORD or auth.username not in ADMIN_USERNAMES:
         return 'Unauthorized', 401
     
     try:
@@ -588,17 +611,18 @@ def main():
     application.add_handler(CommandHandler("about", about_command))
     application.add_handler(CommandHandler("mystats", my_stats_command))
     application.add_handler(CommandHandler("premium", premium_command))
+    application.add_handler(CommandHandler("admin", admin_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(button_callback))
     
     print("="*60)
     print("🌐 Social Media Tools Hub Bot - Premium Central Hub")
     print("🤖 @SocMed_tools_bot")
-    print("✅ أوامر: /start /help /about /mystats /premium")
+    print("✅ أوامر: /start /help /about /mystats /premium /admin")
     print(f"✅ نظام الاشتراك: مجاني {FREE_LIMIT} عملية/بوت - مميز غير محدود")
     print("✅ صفحة الدفع: /payment")
-    print("✅ لوحة الإدارة: /admin")
-    print(f"✅ اسم البوت في قاعدة البيانات: {SYSTEM_BOT_NAME}")
+    print("✅ لوحة الإدارة: /admin (مع مصادقة مزدوجة)")
+    print(f"✅ المطورين المسموح لهم: {', '.join(ADMIN_USERNAMES)}")
     print("="*60)
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)
