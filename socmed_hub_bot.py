@@ -36,10 +36,10 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ========== بيانات البوتات ==========
 BOTS = {
-    "analyzer": {
-        "name": "📊 بوت تحليل يوتيوب",
-        "username": "YouTube_data_analyzer_bot",
-        "icon": "📊",
+    "thumbnail": {
+        "name": "📸 بوت تحميل صور يوتيوب",
+        "username": "YouTube_photos_Extractor_bot",
+        "icon": "📸",
         "order": 1
     },
     "playlist": {
@@ -48,10 +48,10 @@ BOTS = {
         "icon": "🎬",
         "order": 2
     },
-    "thumbnail": {
-        "name": "📸 بوت تحميل صور يوتيوب",
-        "username": "YouTube_photos_Extractor_bot",
-        "icon": "📸",
+    "analyzer": {
+        "name": "📊 بوت تحليل يوتيوب",
+        "username": "YouTube_data_analyzer_bot",
+        "icon": "📊",
         "order": 3
     }
 }
@@ -84,7 +84,9 @@ def get_or_create_user(user_id, first_name, username, language_code):
                     'bot_name': bot_id,
                     'daily_uses': 0,
                     'total_uses': 0,
-                    'last_use_date': date.today().isoformat()
+                    'last_use_date': date.today().isoformat(),
+                    'username': username or '',
+                    'first_name': first_name
                 }).execute()
                 usage_data[bot_id] = {'daily_uses': 0, 'total_uses': 0}
             else:
@@ -156,7 +158,7 @@ def get_premium_inline_keyboard():
     keyboard = [[InlineKeyboardButton("💎 اشتراك مميز - 10 دولار مدى الحياة", web_app=WebAppInfo(url=payment_url))]]
     return InlineKeyboardMarkup(keyboard)
 
-# ========== أوامر البوت (نصوص بدون Markdown معقد) ==========
+# ========== أوامر البوت ==========
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -191,8 +193,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🎯 ماذا يقدم هذا البوت؟\n"
         f"هو مركز التحكم الرئيسي لجميع بوتاتي المتخصصة في تحميل وتحليل محتوى يوتيوب.\n\n"
         f"📱 البوتات المتاحة:\n\n"
-        f"🎬 استخراج روابط يوتيوب\n"
         f"📸 تحميل صور يوتيوب\n"
+        f"🎬 استخراج روابط يوتيوب\n"
         f"📊 تحليل بيانات يوتيوب\n\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"💰 الخطة المجانية:\n"
@@ -326,9 +328,9 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• إحصائيات شخصية لحالة استخدامك\n"
         f"• تحديثات مستمرة بإضافة بوتات جديدة\n\n"
         f"📱 البوتات الحالية:\n"
-        f"• 📊 بوت تحليل يوتيوب\n"
+        f"• 📸 بوت تحميل صور يوتيوب\n"
         f"• 🎬 بوت استخراج روابط يوتيوب\n"
-        f"• 📸 بوت تحميل صور يوتيوب\n\n"
+        f"• 📊 بوت تحليل يوتيوب\n\n"
         f"💰 نظام الاشتراك:\n"
         f"• مجاني: {FREE_LIMIT} عملية يومياً لكل بوت\n"
         f"• مميز: 10 دولار مدى الحياة - استخدام غير محدود\n\n"
@@ -382,49 +384,108 @@ def admin_panel():
         return '🔒 يرجى إدخال كلمة المرور', 401, {'WWW-Authenticate': 'Basic realm="Admin Panel"'}
     
     try:
+        # جلب جميع البيانات
         users = supabase.table('users').select('*').execute()
+        
+        # جلب استخدامات جميع البوتات
+        bot_usage_thumbnail = supabase.table('bot_usage').select('*').eq('bot_name', 'thumbnail').execute()
+        bot_usage_playlist = supabase.table('bot_usage').select('*').eq('bot_name', 'playlist').execute()
+        bot_usage_analyzer = supabase.table('bot_usage').select('*').eq('bot_name', 'analyzer').execute()
+        
+        # ========== إحصائيات آخر 7 أيام ==========
+        today = date.today()
+        daily_stats = []
+        
+        for i in range(6, -1, -1):
+            target_date = today - timedelta(days=i)
+            date_str = target_date.strftime('%Y-%m-%d')
+            
+            # حساب الاستخدامات في هذا اليوم
+            thumbnail_daily = sum(1 for u in bot_usage_thumbnail.data if u.get('last_use_date') == date_str)
+            playlist_daily = sum(1 for u in bot_usage_playlist.data if u.get('last_use_date') == date_str)
+            analyzer_daily = sum(1 for u in bot_usage_analyzer.data if u.get('last_use_date') == date_str)
+            
+            daily_stats.append({
+                'date': target_date.strftime('%d/%m/%Y'),
+                'thumbnail': thumbnail_daily,
+                'playlist': playlist_daily,
+                'analyzer': analyzer_daily,
+                'total': thumbnail_daily + playlist_daily + analyzer_daily
+            })
+        
+        # ========== إحصائيات عامة ==========
+        usage_thumbnail_dict = {u['user_id']: u for u in bot_usage_thumbnail.data}
+        usage_playlist_dict = {u['user_id']: u for u in bot_usage_playlist.data}
+        usage_analyzer_dict = {u['user_id']: u for u in bot_usage_analyzer.data}
+        
+        total_uses_photos = sum(u.get('total_uses', 0) for u in bot_usage_thumbnail.data)
+        total_uses_playlist = sum(u.get('total_uses', 0) for u in bot_usage_playlist.data)
+        total_uses_analyzer = sum(u.get('total_uses', 0) for u in bot_usage_analyzer.data)
         
         users_list = []
         premium_count = 0
         free_count = 0
-        total_uses = 0
         
         for user in users.data:
+            usage_thumbnail = usage_thumbnail_dict.get(user['user_id'], {})
+            usage_playlist = usage_playlist_dict.get(user['user_id'], {})
+            usage_analyzer = usage_analyzer_dict.get(user['user_id'], {})
+            
+            # استخدام الاسم من bot_usage (المخزن مع كل استخدام)
+            first_name = usage_thumbnail.get('first_name') or usage_playlist.get('first_name') or usage_analyzer.get('first_name') or user.get('first_name', '-')
+            username = usage_thumbnail.get('username') or usage_playlist.get('username') or usage_analyzer.get('username') or user.get('username', '-')
+            
+            daily_thumbnail = usage_thumbnail.get('daily_uses', 0)
+            daily_playlist = usage_playlist.get('daily_uses', 0)
+            daily_analyzer = usage_analyzer.get('daily_uses', 0)
+            
             if user['status'] == 'premium':
                 premium_count += 1
             else:
                 free_count += 1
             
-            usage_by_bot = {}
-            for bot_id in BOTS.keys():
-                usage = supabase.table('bot_usage').select('*').eq('user_id', user['user_id']).eq('bot_name', bot_id).execute()
-                if usage.data:
-                    total_uses += usage.data[0].get('total_uses', 0)
-                    usage_by_bot[bot_id] = usage.data[0].get('daily_uses', 0)
-                else:
-                    usage_by_bot[bot_id] = 0
-            
             users_list.append({
                 'user_id': user['user_id'],
-                'first_name': user['first_name'] or '-',
-                'username': user['username'] or '-',
+                'first_name': first_name,
+                'username': username,
                 'status': user['status'],
                 'premium_until': user.get('premium_until', '-'),
-                'usage': usage_by_bot
+                'usage': {
+                    'thumbnail': daily_thumbnail,
+                    'playlist': daily_playlist,
+                    'analyzer': daily_analyzer
+                }
             })
+        
+        # عدد النشطاء اليوم
+        today_str = str(date.today())
+        active_users = set()
+        for u in bot_usage_thumbnail.data:
+            if u.get('last_use_date') == today_str:
+                active_users.add(u['user_id'])
+        for u in bot_usage_playlist.data:
+            if u.get('last_use_date') == today_str:
+                active_users.add(u['user_id'])
+        for u in bot_usage_analyzer.data:
+            if u.get('last_use_date') == today_str:
+                active_users.add(u['user_id'])
         
         stats = {
             'total_users': len(users.data),
             'premium_users': premium_count,
             'free_users': free_count,
-            'total_uses': total_uses,
-            'bots': BOTS,
+            'total_uses': total_uses_photos + total_uses_playlist + total_uses_analyzer,
+            'total_uses_photos': total_uses_photos,
+            'total_uses_playlist': total_uses_playlist,
+            'total_uses_analyzer': total_uses_analyzer,
+            'active_today': len(active_users),
             'last_update': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
-        return render_template('admin.html', users=users_list, stats=stats, free_limit=FREE_LIMIT)
+        return render_template('admin.html', users=users_list, stats=stats, daily_stats=daily_stats, free_limit=FREE_LIMIT)
     
     except Exception as e:
+        logger.error(f"Admin panel error: {e}")
         return f"خطأ: {e}", 500
 
 @app.route('/upgrade-user', methods=['POST'])
