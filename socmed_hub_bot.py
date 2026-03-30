@@ -387,10 +387,51 @@ def admin_panel():
         # جلب جميع البيانات
         users = supabase.table('users').select('*').execute()
         
-        # جلب استخدامات جميع البوتات
-        bot_usage_thumbnail = supabase.table('bot_usage').select('*').eq('bot_name', 'thumbnail').execute()
-        bot_usage_playlist = supabase.table('bot_usage').select('*').eq('bot_name', 'playlist').execute()
-        bot_usage_analyzer = supabase.table('bot_usage').select('*').eq('bot_name', 'analyzer').execute()
+        # جلب استخدامات جميع البوتات (بجميع الأسماء الممكنة)
+        # بوت الصور
+        bot_usage_thumbnail_1 = supabase.table('bot_usage').select('*').eq('bot_name', 'thumbnail').execute()
+        bot_usage_thumbnail_2 = supabase.table('bot_usage').select('*').eq('bot_name', 'youtube-photos-extractor').execute()
+        bot_usage_thumbnail = bot_usage_thumbnail_1.data + bot_usage_thumbnail_2.data
+        
+        # بوت الروابط
+        bot_usage_playlist_1 = supabase.table('bot_usage').select('*').eq('bot_name', 'playlist').execute()
+        bot_usage_playlist_2 = supabase.table('bot_usage').select('*').eq('bot_name', 'YouTube_Playlist_Extractor').execute()
+        bot_usage_playlist = bot_usage_playlist_1.data + bot_usage_playlist_2.data
+        
+        # بوت التحليل
+        bot_usage_analyzer_1 = supabase.table('bot_usage').select('*').eq('bot_name', 'analyzer').execute()
+        bot_usage_analyzer_2 = supabase.table('bot_usage').select('*').eq('bot_name', 'youtube_analyzer').execute()
+        bot_usage_analyzer = bot_usage_analyzer_1.data + bot_usage_analyzer_2.data
+        
+        # طباعة في السجل للتحقق
+        logger.info(f"Thumbnail count: {len(bot_usage_thumbnail)}")
+        logger.info(f"Playlist count: {len(bot_usage_playlist)}")
+        logger.info(f"Analyzer count: {len(bot_usage_analyzer)}")
+        
+        # إنشاء قواميس للاستخدامات (دمج البيانات - أخذ أحدث سجل لكل مستخدم)
+        usage_thumbnail_dict = {}
+        usage_playlist_dict = {}
+        usage_analyzer_dict = {}
+        
+        for u in bot_usage_thumbnail:
+            uid = u['user_id']
+            if uid not in usage_thumbnail_dict or u.get('last_use_date') > usage_thumbnail_dict[uid].get('last_use_date', ''):
+                usage_thumbnail_dict[uid] = u
+        
+        for u in bot_usage_playlist:
+            uid = u['user_id']
+            if uid not in usage_playlist_dict or u.get('last_use_date') > usage_playlist_dict[uid].get('last_use_date', ''):
+                usage_playlist_dict[uid] = u
+        
+        for u in bot_usage_analyzer:
+            uid = u['user_id']
+            if uid not in usage_analyzer_dict or u.get('last_use_date') > usage_analyzer_dict[uid].get('last_use_date', ''):
+                usage_analyzer_dict[uid] = u
+        
+        # إحصائيات إجمالية
+        total_uses_photos = sum(u.get('total_uses', 0) for u in bot_usage_thumbnail)
+        total_uses_playlist = sum(u.get('total_uses', 0) for u in bot_usage_playlist)
+        total_uses_analyzer = sum(u.get('total_uses', 0) for u in bot_usage_analyzer)
         
         # ========== إحصائيات آخر 7 أيام ==========
         today = date.today()
@@ -400,10 +441,9 @@ def admin_panel():
             target_date = today - timedelta(days=i)
             date_str = target_date.strftime('%Y-%m-%d')
             
-            # حساب الاستخدامات في هذا اليوم
-            thumbnail_daily = sum(1 for u in bot_usage_thumbnail.data if u.get('last_use_date') == date_str)
-            playlist_daily = sum(1 for u in bot_usage_playlist.data if u.get('last_use_date') == date_str)
-            analyzer_daily = sum(1 for u in bot_usage_analyzer.data if u.get('last_use_date') == date_str)
+            thumbnail_daily = sum(1 for u in bot_usage_thumbnail if u.get('last_use_date') == date_str)
+            playlist_daily = sum(1 for u in bot_usage_playlist if u.get('last_use_date') == date_str)
+            analyzer_daily = sum(1 for u in bot_usage_analyzer if u.get('last_use_date') == date_str)
             
             daily_stats.append({
                 'date': target_date.strftime('%d/%m/%Y'),
@@ -413,15 +453,7 @@ def admin_panel():
                 'total': thumbnail_daily + playlist_daily + analyzer_daily
             })
         
-        # ========== إحصائيات عامة ==========
-        usage_thumbnail_dict = {u['user_id']: u for u in bot_usage_thumbnail.data}
-        usage_playlist_dict = {u['user_id']: u for u in bot_usage_playlist.data}
-        usage_analyzer_dict = {u['user_id']: u for u in bot_usage_analyzer.data}
-        
-        total_uses_photos = sum(u.get('total_uses', 0) for u in bot_usage_thumbnail.data)
-        total_uses_playlist = sum(u.get('total_uses', 0) for u in bot_usage_playlist.data)
-        total_uses_analyzer = sum(u.get('total_uses', 0) for u in bot_usage_analyzer.data)
-        
+        # ========== إحصائيات المستخدمين ==========
         users_list = []
         premium_count = 0
         free_count = 0
@@ -460,13 +492,13 @@ def admin_panel():
         # عدد النشطاء اليوم
         today_str = str(date.today())
         active_users = set()
-        for u in bot_usage_thumbnail.data:
+        for u in bot_usage_thumbnail:
             if u.get('last_use_date') == today_str:
                 active_users.add(u['user_id'])
-        for u in bot_usage_playlist.data:
+        for u in bot_usage_playlist:
             if u.get('last_use_date') == today_str:
                 active_users.add(u['user_id'])
-        for u in bot_usage_analyzer.data:
+        for u in bot_usage_analyzer:
             if u.get('last_use_date') == today_str:
                 active_users.add(u['user_id'])
         
