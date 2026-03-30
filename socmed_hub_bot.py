@@ -6,11 +6,12 @@ Social Media Tools Hub Bot - Premium Central Hub
 import os
 import logging
 import threading
+import secrets
 from datetime import datetime, date, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from supabase import create_client, Client
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, session
 
 # ========== متغيرات البيئة ==========
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
@@ -18,10 +19,11 @@ SUPABASE_URL = os.environ.get('SUPABASE_URL')
 SUPABASE_KEY = os.environ.get('SUPABASE_ANON_KEY')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'alshabany#772130900')
 ADMIN_USERNAMES = os.environ.get('ADMIN_USERNAMES', 'E_Alshabany').split(',')
-ADMIN_USERNAMES = [u.strip() for u in ADMIN_USERNAMES]  # إزالة المسافات
+ADMIN_USERNAMES = [u.strip() for u in ADMIN_USERNAMES]
 FREE_LIMIT = int(os.environ.get('FREE_LIMIT', '5'))
 RENDER_URL = os.environ.get('RENDER_URL', 'socmed-tools-hub-xprw.onrender.com')
 SYSTEM_BOT_NAME = os.environ.get('SYSTEM_BOT_NAME', 'system')
+FLASK_SECRET_KEY = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
 
 if not TELEGRAM_TOKEN or not SUPABASE_URL or not SUPABASE_KEY:
     print("❌ خطأ: تأكد من تعيين المتغيرات المطلوبة")
@@ -58,6 +60,105 @@ BOTS = {
         "order": 3
     }
 }
+
+# ========== نموذج تسجيل الدخول المدمج ==========
+LOGIN_FORM = """
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تسجيل الدخول - لوحة الإدارة</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', 'Tahoma', 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .login-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        .login-card h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 30px;
+            font-size: 1.8rem;
+        }
+        .login-card input {
+            width: 100%;
+            padding: 12px 15px;
+            margin: 10px 0;
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        .login-card input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+        }
+        .login-card button {
+            width: 100%;
+            padding: 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.2s;
+        }
+        .login-card button:hover {
+            background: #5a67d8;
+            transform: scale(1.02);
+        }
+        .error {
+            background: #fee;
+            color: #dc3545;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h1>🔐 لوحة الإدارة</h1>
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+        <form method="POST">
+            <input type="text" name="username" placeholder="اسم المستخدم" required>
+            <input type="password" name="password" placeholder="كلمة المرور" required>
+            <button type="submit">🚪 دخول</button>
+        </form>
+        <div class="footer">
+            🔒 فقط للمطورين المعتمدين
+        </div>
+    </div>
+</body>
+</html>
+"""
 
 # ========== دوال قاعدة البيانات ==========
 
@@ -417,6 +518,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ========== Flask Routes ==========
 
 app = Flask(__name__)
+app.secret_key = FLASK_SECRET_KEY
 
 @app.route('/')
 @app.route('/health')
@@ -428,27 +530,23 @@ def health():
 def payment_page():
     return render_template('payment.html', free_limit=FREE_LIMIT)
 
-@app.route('/admin')
+@app.route('/admin', methods=['GET', 'POST'])
 def admin_panel():
-    # التحقق من المصادقة الأساسية
-    auth = request.authorization
+    # التحقق من تسجيل الدخول عبر النموذج المدمج
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if password == ADMIN_PASSWORD and username in ADMIN_USERNAMES:
+            session['admin_logged_in'] = True
+            session['admin_username'] = username
+            return redirect(url_for('admin_panel'))
+        else:
+            return render_template_string(LOGIN_FORM, error="❌ اسم المستخدم أو كلمة المرور غير صحيحة")
     
-    if not auth:
-        return '🔒 يرجى إدخال اسم المستخدم وكلمة المرور', 401, {
-            'WWW-Authenticate': 'Basic realm="Admin Panel"'
-        }
-    
-    # التحقق من كلمة المرور
-    if auth.password != ADMIN_PASSWORD:
-        return '🔒 كلمة المرور غير صحيحة', 401, {
-            'WWW-Authenticate': 'Basic realm="Admin Panel"'
-        }
-    
-    # التحقق من اسم المستخدم (القائمة البيضاء)
-    if auth.username not in ADMIN_USERNAMES:
-        return '⛔ غير مصرح لك بالدخول - اسم المستخدم غير معتمد', 401, {
-            'WWW-Authenticate': 'Basic realm="Admin Panel"'
-        }
+    # التحقق من وجود جلسة نشطة
+    if not session.get('admin_logged_in'):
+        return render_template_string(LOGIN_FORM)
     
     try:
         users = supabase.table('users').select('*').execute()
@@ -549,9 +647,8 @@ def admin_panel():
 
 @app.route('/upgrade-user', methods=['POST'])
 def upgrade_user():
-    auth = request.authorization
-    if not auth or auth.password != ADMIN_PASSWORD or auth.username not in ADMIN_USERNAMES:
-        return 'Unauthorized', 401
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_panel'))
     
     try:
         user_id = int(request.form.get('user_id'))
@@ -568,9 +665,8 @@ def upgrade_user():
 
 @app.route('/downgrade-user', methods=['POST'])
 def downgrade_user():
-    auth = request.authorization
-    if not auth or auth.password != ADMIN_PASSWORD or auth.username not in ADMIN_USERNAMES:
-        return 'Unauthorized', 401
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_panel'))
     
     try:
         user_id = int(request.form.get('user_id'))
@@ -621,7 +717,7 @@ def main():
     print("✅ أوامر: /start /help /about /mystats /premium /admin")
     print(f"✅ نظام الاشتراك: مجاني {FREE_LIMIT} عملية/بوت - مميز غير محدود")
     print("✅ صفحة الدفع: /payment")
-    print("✅ لوحة الإدارة: /admin (مع مصادقة مزدوجة)")
+    print("✅ لوحة الإدارة: /admin (نموذج تسجيل دخول مدمج)")
     print(f"✅ المطورين المسموح لهم: {', '.join(ADMIN_USERNAMES)}")
     print("="*60)
     
