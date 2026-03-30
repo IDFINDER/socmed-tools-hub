@@ -1,9 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>لوحة إدارة بوتات الأدوات الاجتماعية</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -33,14 +34,41 @@
             padding: 20px;
             text-align: center;
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
         }
+        .stat-card:hover { transform: translateY(-3px); }
         .stat-number { font-size: 2rem; font-weight: bold; color: #667eea; }
         .stat-label { color: #6c757d; font-size: 0.85rem; margin-top: 5px; }
+        
+        /* قسم الرسوم البيانية */
+        .charts-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+        .chart-card {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .chart-card h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            border-right: 3px solid #667eea;
+            padding-right: 12px;
+        }
+        .chart-container { position: relative; height: 280px; }
+        
+        /* جدول المستخدمين */
         .users-section {
             background: white;
             border-radius: 20px;
             padding: 20px;
             overflow-x: auto;
+            margin-bottom: 30px;
         }
         .section-header {
             display: flex;
@@ -48,6 +76,7 @@
             align-items: center;
             margin-bottom: 20px;
             flex-wrap: wrap;
+            gap: 15px;
         }
         .refresh-btn {
             background: #667eea;
@@ -56,7 +85,40 @@
             padding: 10px 20px;
             border-radius: 10px;
             cursor: pointer;
+            transition: all 0.2s;
         }
+        .refresh-btn:hover { background: #5a67d8; transform: scale(1.02); }
+        
+        /* جدول الإحصائيات اليومية */
+        .daily-stats-section {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 30px;
+            overflow-x: auto;
+        }
+        .daily-stats-section h3 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+            border-right: 3px solid #667eea;
+            padding-right: 12px;
+        }
+        .daily-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .daily-table th, .daily-table td {
+            padding: 12px;
+            text-align: center;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .daily-table th {
+            background: #f8f9fa;
+            color: #495057;
+            font-weight: 600;
+        }
+        .daily-table tr:hover { background: #f8f9fa; }
+        
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 12px; text-align: center; border-bottom: 1px solid #e9ecef; }
         th { background: #f8f9fa; color: #495057; font-weight: 600; }
@@ -91,7 +153,9 @@
             padding: 6px 12px;
             border-radius: 6px;
             cursor: pointer;
+            transition: all 0.2s;
         }
+        .upgrade-btn:hover { background: #218838; transform: scale(1.02); }
         .downgrade-btn {
             background: #dc3545;
             color: white;
@@ -99,18 +163,25 @@
             padding: 6px 12px;
             border-radius: 6px;
             cursor: pointer;
+            transition: all 0.2s;
         }
-        .footer { text-align: center; margin-top: 30px; padding: 20px; color: #6c757d; font-size: 0.8rem; }
-        @media (max-width: 768px) { th, td { font-size: 0.75rem; padding: 8px; } }
+        .downgrade-btn:hover { background: #c82333; transform: scale(1.02); }
+        .footer { text-align: center; margin-top: 30px; padding: 20px; color: #6c757d; font-size: 0.8rem; border-top: 1px solid #e9ecef; }
+        
+        @media (max-width: 768px) {
+            .charts-section { grid-template-columns: 1fr; }
+            th, td { font-size: 0.75rem; padding: 8px; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🎬 لوحة إدارة بوتات الأدوات الاجتماعية</h1>
-            <p>إدارة موحدة لجميع البوتات | نظام اشتراك مميز</p>
+            <p>إدارة موحدة لجميع البوتات | نظام اشتراك مميز | إحصائيات تفصيلية</p>
         </div>
         
+        <!-- بطاقات الإحصائيات -->
         <div class="stats-grid">
             <div class="stat-card"><div class="stat-number">{{ stats.total_users }}</div><div class="stat-label">إجمالي المستخدمين</div></div>
             <div class="stat-card"><div class="stat-number">{{ stats.premium_users }}</div><div class="stat-label">مستخدمين مميزين</div></div>
@@ -118,6 +189,50 @@
             <div class="stat-card"><div class="stat-number">{{ stats.total_uses }}</div><div class="stat-label">إجمالي العمليات</div></div>
         </div>
         
+        <!-- الرسوم البيانية -->
+        <div class="charts-section">
+            <div class="chart-card">
+                <h3>📊 توزيع المستخدمين</h3>
+                <div class="chart-container">
+                    <canvas id="userDistributionChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>📈 استخدامات البوتات (إجمالي)</h3>
+                <div class="chart-container">
+                    <canvas id="botUsageChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- إحصائيات آخر 7 أيام -->
+        <div class="daily-stats-section">
+            <h3>📅 إحصائيات آخر 7 أيام</h3>
+            <table class="daily-table">
+                <thead>
+                    <tr>
+                        <th>التاريخ</th>
+                        <th>📸 بوت الصور</th>
+                        <th>🎬 بوت الروابط</th>
+                        <th>📊 بوت التحليل</th>
+                        <th>المجموع اليومي</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for day in daily_stats %}
+                    <tr>
+                        <td>{{ day.date }}</td>
+                        <td><span class="usage-badge">{{ day.thumbnail }}</span></td>
+                        <td><span class="usage-badge">{{ day.playlist }}</span></td>
+                        <td><span class="usage-badge">{{ day.analyzer }}</span></td>
+                        <td><strong>{{ day.total }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- قائمة المستخدمين -->
         <div class="users-section">
             <div class="section-header">
                 <h2>📋 قائمة المستخدمين</h2>
@@ -125,7 +240,17 @@
             </div>
             <table>
                 <thead>
-                    <tr><th>المعرف</th><th>الاسم</th><th>اليوزرنيم</th><th>الحالة</th><th>ينتهي في</th><th>📸 الصور</th><th>🎬 الروابط</th><th>📊 التحليل</th><th>الإجراء</th></tr>
+                    <tr>
+                        <th>المعرف</th>
+                        <th>الاسم</th>
+                        <th>اليوزرنيم</th>
+                        <th>الحالة</th>
+                        <th>ينتهي في</th>
+                        <th>📸 الصور</th>
+                        <th>🎬 الروابط</th>
+                        <th>📊 التحليل</th>
+                        <th>الإجراء</th>
+                    </tr>
                 </thead>
                 <tbody>
                     {% for user in users %}
@@ -150,7 +275,74 @@
                 </tbody>
             </table>
         </div>
-        <div class="footer">🤖 نظام إدارة بوتات الأدوات الاجتماعية | آخر تحديث: {{ stats.last_update }}</div>
+        
+        <div class="footer">
+            🤖 نظام إدارة بوتات الأدوات الاجتماعية | آخر تحديث: {{ stats.last_update }}
+        </div>
     </div>
+    
+    <script>
+        // رسم بياني لتوزيع المستخدمين
+        const userCtx = document.getElementById('userDistributionChart').getContext('2d');
+        new Chart(userCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['مستخدمين مميزين', 'مستخدمين مجانيين'],
+                datasets: [{
+                    data: [{{ stats.premium_users }}, {{ stats.free_users }}],
+                    backgroundColor: ['#667eea', '#e9ecef'],
+                    borderWidth: 0,
+                    hoverOffset: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { size: 12 }, color: '#2c3e50' } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.raw || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                return `${label}: ${value} (${percentage}%)`;
+                            }
+                        }
+                    }
+                },
+                cutout: '65%'
+            }
+        });
+        
+        // رسم بياني لاستخدامات البوتات
+        const usageCtx = document.getElementById('botUsageChart').getContext('2d');
+        new Chart(usageCtx, {
+            type: 'bar',
+            data: {
+                labels: ['بوت الصور', 'بوت الروابط', 'بوت التحليل'],
+                datasets: [{
+                    label: 'إجمالي الاستخدامات',
+                    data: [{{ stats.total_uses_photos }}, {{ stats.total_uses_playlist }}, {{ stats.total_uses_analyzer }}],
+                    backgroundColor: ['#667eea', '#48bb78', '#ed8936'],
+                    borderRadius: 8,
+                    barPercentage: 0.6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top', labels: { font: { size: 12 } } },
+                    tooltip: { callbacks: { label: function(context) { return `الاستخدامات: ${context.raw.toLocaleString()}`; } } }
+                },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: '#e9ecef' }, title: { display: true, text: 'عدد الاستخدامات', font: { size: 11 } } },
+                    x: { grid: { display: false }, title: { display: true, text: 'البوتات', font: { size: 11 } } }
+                }
+            }
+        });
+    </script>
 </body>
 </html>
