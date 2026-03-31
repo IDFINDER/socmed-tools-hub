@@ -499,6 +499,11 @@ def admin_panel():
             daily_playlist = usage_playlist.get('daily_uses', 0)
             daily_analyzer = usage_analyzer.get('daily_uses', 0)
             
+            # ✅ إضافة إجمالي الاستخدامات للمستخدمين المميزين
+            total_thumbnail = usage_thumbnail.get('total_uses', 0)
+            total_playlist = usage_playlist.get('total_uses', 0)
+            total_analyzer = usage_analyzer.get('total_uses', 0)
+            
             if user['status'] == 'premium':
                 premium_count += 1
             else:
@@ -514,6 +519,11 @@ def admin_panel():
                     'thumbnail': daily_thumbnail,
                     'playlist': daily_playlist,
                     'analyzer': daily_analyzer
+                },
+                'total_usage': {  # ✅ إضافة إجمالي الاستخدامات
+                    'thumbnail': total_thumbnail,
+                    'playlist': total_playlist,
+                    'analyzer': total_analyzer
                 }
             })
         
@@ -623,6 +633,7 @@ def main():
     print("✅ صفحة الدفع: /payment")
     print("✅ لوحة الإدارة: /admin (مع مصادقة مزدوجة)")
     print(f"✅ المطورين المسموح لهم: {', '.join(ADMIN_USERNAMES)}")
+    print("✅ عرض إجمالي الاستخدامات للمستخدمين المميزين في لوحة الإدارة")
     print("="*60)
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)
