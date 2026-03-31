@@ -160,9 +160,20 @@
         .usage-badge {
             background: #48bb78;
             color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.7rem;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .total-badge {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            display: inline-block;
         }
         .upgrade-btn {
             background: #28a745;
@@ -265,9 +276,34 @@
                             <td>@{{ user.username }}</td>
                             <td>{% if user.status == 'premium' %}<span class="premium-badge">👑 مميز</span>{% else %}<span class="free-badge">🎁 مجاني</span>{% endif %}</td>
                             <td>{{ user.premium_until or '-' }}</td>
-                            <td><span class="usage-badge">{{ user.usage.thumbnail|default(0) }}/{{ free_limit }}</span></td>
-                            <td><span class="usage-badge">{{ user.usage.playlist|default(0) }}/{{ free_limit }}</span></td>
-                            <td><span class="usage-badge">{{ user.usage.analyzer|default(0) }}/{{ free_limit }}</span></td>
+                            
+                            <!-- عمود الصور - عرض مختلف للمميزين -->
+                            <td>
+                                {% if user.status == 'premium' %}
+                                    <span class="total-badge">📊 {{ user.total_usage.thumbnail|default(0) }}</span>
+                                {% else %}
+                                    <span class="usage-badge">{{ user.usage.thumbnail|default(0) }}/{{ free_limit }}</span>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- عمود الروابط - عرض مختلف للمميزين -->
+                            <td>
+                                {% if user.status == 'premium' %}
+                                    <span class="total-badge">📊 {{ user.total_usage.playlist|default(0) }}</span>
+                                {% else %}
+                                    <span class="usage-badge">{{ user.usage.playlist|default(0) }}/{{ free_limit }}</span>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- عمود التحليل - عرض مختلف للمميزين -->
+                            <td>
+                                {% if user.status == 'premium' %}
+                                    <span class="total-badge">📊 {{ user.total_usage.analyzer|default(0) }}</span>
+                                {% else %}
+                                    <span class="usage-badge">{{ user.usage.analyzer|default(0) }}/{{ free_limit }}</span>
+                                {% endif %}
+                            </td>
+                            
                             <td>
                                 {% if user.status == 'free' %}
                                     <form method="POST" action="/upgrade-user" style="display:inline;">
