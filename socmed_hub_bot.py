@@ -515,6 +515,12 @@ def admin_panel():
             daily_analyzer = usage_analyzer.get('daily_uses', 0)
             daily_songs = usage_songs.get('daily_uses', 0)
             
+            # إجمالي الاستخدامات (للمميزين)
+            total_thumbnail = usage_thumbnail.get('total_uses', 0)
+            total_playlist = usage_playlist.get('total_uses', 0)
+            total_analyzer = usage_analyzer.get('total_uses', 0)
+            total_songs = usage_songs.get('total_uses', 0)
+            
             if user['status'] == 'premium':
                 premium_count += 1
             else:
@@ -531,6 +537,12 @@ def admin_panel():
                     'playlist': daily_playlist,
                     'analyzer': daily_analyzer,
                     'songs': daily_songs
+                },
+                'total_usage': {
+                    'thumbnail': total_thumbnail,
+                    'playlist': total_playlist,
+                    'analyzer': total_analyzer,
+                    'songs': total_songs
                 }
             })
         
@@ -567,7 +579,6 @@ def admin_panel():
     except Exception as e:
         logger.error(f"Admin panel error: {e}")
         return f"خطأ: {e}", 500
-
 @app.route('/upgrade-user', methods=['POST'])
 def upgrade_user():
     auth = request.authorization
