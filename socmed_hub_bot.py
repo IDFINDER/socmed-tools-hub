@@ -56,6 +56,12 @@ BOTS = {
         "username": "YouTube_data_analyzer_bot",
         "icon": "📊",
         "order": 3
+    },
+    "songs": {
+        "name": "🎵 بوت كلمات الأغاني",
+        "username": "words_Songs_Bot",
+        "icon": "🎵",
+        "order": 4
     }
 }
 
@@ -225,7 +231,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📱 البوتات المتاحة:\n\n"
         f"📸 تحميل صور يوتيوب\n"
         f"🎬 استخراج روابط يوتيوب\n"
-        f"📊 تحليل بيانات يوتيوب\n\n"
+        f"📊 تحليل بيانات يوتيوب\n"
+        f"🎵 كلمات الأغاني والأناشيد\n\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"💰 الخطة المجانية:\n"
         f"• {FREE_LIMIT} عملية يومياً لكل بوت\n\n"
@@ -370,7 +377,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     about_text = (
         f"🌐 بوت الأدوات الاجتماعية - Social Media Tools Hub\n\n"
-        f"🎯 الإصدار: 2.0 (مركز التحكم الرئيسي)\n\n"
+        f"🎯 الإصدار: 2.1 (مركز التحكم الرئيسي)\n\n"
         f"✨ الرؤية:\n"
         f"مركز واحد يجمع جميع أدوات تحميل وتحليل محتوى منصات التواصل الاجتماعي.\n\n"
         f"✅ المميزات:\n"
@@ -381,7 +388,8 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📱 البوتات الحالية:\n"
         f"• 📸 بوت تحميل صور يوتيوب\n"
         f"• 🎬 بوت استخراج روابط يوتيوب\n"
-        f"• 📊 بوت تحليل يوتيوب\n\n"
+        f"• 📊 بوت تحليل يوتيوب\n"
+        f"• 🎵 بوت كلمات الأغاني والأناشيد\n\n"
         f"💰 نظام الاشتراك:\n"
         f"• مجاني: {FREE_LIMIT} عملية يومياً لكل بوت\n"
         f"• مميز: 10 دولار مدى الحياة - استخدام غير محدود\n\n"
@@ -453,17 +461,21 @@ def admin_panel():
     try:
         users = supabase.table('users').select('*').execute()
         
+        # جلب استخدامات جميع البوتات (بما في ذلك بوت الأغاني)
         bot_usage_thumbnail = supabase.table('bot_usage').select('*').eq('bot_name', 'thumbnail').execute()
         bot_usage_playlist = supabase.table('bot_usage').select('*').eq('bot_name', 'playlist').execute()
         bot_usage_analyzer = supabase.table('bot_usage').select('*').eq('bot_name', 'analyzer').execute()
+        bot_usage_songs = supabase.table('bot_usage').select('*').eq('bot_name', 'songs').execute()
         
         usage_thumbnail_dict = {u['user_id']: u for u in bot_usage_thumbnail.data}
         usage_playlist_dict = {u['user_id']: u for u in bot_usage_playlist.data}
         usage_analyzer_dict = {u['user_id']: u for u in bot_usage_analyzer.data}
+        usage_songs_dict = {u['user_id']: u for u in bot_usage_songs.data}
         
         total_uses_photos = sum(u.get('total_uses', 0) for u in bot_usage_thumbnail.data)
         total_uses_playlist = sum(u.get('total_uses', 0) for u in bot_usage_playlist.data)
         total_uses_analyzer = sum(u.get('total_uses', 0) for u in bot_usage_analyzer.data)
+        total_uses_songs = sum(u.get('total_uses', 0) for u in bot_usage_songs.data)
         
         today = date.today()
         daily_stats = []
@@ -474,13 +486,15 @@ def admin_panel():
             thumbnail_daily = sum(1 for u in bot_usage_thumbnail.data if u.get('last_use_date') == date_str)
             playlist_daily = sum(1 for u in bot_usage_playlist.data if u.get('last_use_date') == date_str)
             analyzer_daily = sum(1 for u in bot_usage_analyzer.data if u.get('last_use_date') == date_str)
+            songs_daily = sum(1 for u in bot_usage_songs.data if u.get('last_use_date') == date_str)
             
             daily_stats.append({
                 'date': target_date.strftime('%d/%m/%Y'),
                 'thumbnail': thumbnail_daily,
                 'playlist': playlist_daily,
                 'analyzer': analyzer_daily,
-                'total': thumbnail_daily + playlist_daily + analyzer_daily
+                'songs': songs_daily,
+                'total': thumbnail_daily + playlist_daily + analyzer_daily + songs_daily
             })
         
         users_list = []
@@ -491,6 +505,7 @@ def admin_panel():
             usage_thumbnail = usage_thumbnail_dict.get(user['user_id'], {})
             usage_playlist = usage_playlist_dict.get(user['user_id'], {})
             usage_analyzer = usage_analyzer_dict.get(user['user_id'], {})
+            usage_songs = usage_songs_dict.get(user['user_id'], {})
             
             first_name = user.get('first_name', '-')
             username = user.get('username', '-')
@@ -498,11 +513,7 @@ def admin_panel():
             daily_thumbnail = usage_thumbnail.get('daily_uses', 0)
             daily_playlist = usage_playlist.get('daily_uses', 0)
             daily_analyzer = usage_analyzer.get('daily_uses', 0)
-            
-            # ✅ إضافة إجمالي الاستخدامات للمستخدمين المميزين
-            total_thumbnail = usage_thumbnail.get('total_uses', 0)
-            total_playlist = usage_playlist.get('total_uses', 0)
-            total_analyzer = usage_analyzer.get('total_uses', 0)
+            daily_songs = usage_songs.get('daily_uses', 0)
             
             if user['status'] == 'premium':
                 premium_count += 1
@@ -518,12 +529,8 @@ def admin_panel():
                 'usage': {
                     'thumbnail': daily_thumbnail,
                     'playlist': daily_playlist,
-                    'analyzer': daily_analyzer
-                },
-                'total_usage': {  # ✅ إضافة إجمالي الاستخدامات
-                    'thumbnail': total_thumbnail,
-                    'playlist': total_playlist,
-                    'analyzer': total_analyzer
+                    'analyzer': daily_analyzer,
+                    'songs': daily_songs
                 }
             })
         
@@ -538,15 +545,19 @@ def admin_panel():
         for u in bot_usage_analyzer.data:
             if u.get('last_use_date') == today_str:
                 active_users.add(u['user_id'])
+        for u in bot_usage_songs.data:
+            if u.get('last_use_date') == today_str:
+                active_users.add(u['user_id'])
         
         stats = {
             'total_users': len(users.data),
             'premium_users': premium_count,
             'free_users': free_count,
-            'total_uses': total_uses_photos + total_uses_playlist + total_uses_analyzer,
+            'total_uses': total_uses_photos + total_uses_playlist + total_uses_analyzer + total_uses_songs,
             'total_uses_photos': total_uses_photos,
             'total_uses_playlist': total_uses_playlist,
             'total_uses_analyzer': total_uses_analyzer,
+            'total_uses_songs': total_uses_songs,
             'active_today': len(active_users),
             'last_update': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
@@ -630,10 +641,10 @@ def main():
     print("🤖 @SocMed_tools_bot")
     print("✅ أوامر: /start /help /about /mystats /premium /admin")
     print(f"✅ نظام الاشتراك: مجاني {FREE_LIMIT} عملية/بوت - مميز غير محدود")
+    print("✅ البوتات المتاحة: صور، روابط، تحليل، أغاني")
     print("✅ صفحة الدفع: /payment")
     print("✅ لوحة الإدارة: /admin (مع مصادقة مزدوجة)")
     print(f"✅ المطورين المسموح لهم: {', '.join(ADMIN_USERNAMES)}")
-    print("✅ عرض إجمالي الاستخدامات للمستخدمين المميزين في لوحة الإدارة")
     print("="*60)
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)
