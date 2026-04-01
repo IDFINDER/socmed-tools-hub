@@ -265,9 +265,9 @@
                             <th>📸 الصور</th>
                             <th>🎬 الروابط</th>
                             <th>📊 التحليل</th>
+                            <th>🎵 الأغاني</th>
                             <th>الإجراء</th>
-                        </tr>
-                    </thead>
+                        </thead>
                     <tbody>
                         {% for user in users %}
                         <tr data-user-id="{{ user.user_id }}" data-name="{{ user.first_name }}" data-username="{{ user.username }}">
@@ -277,7 +277,7 @@
                             <td>{% if user.status == 'premium' %}<span class="premium-badge">👑 مميز</span>{% else %}<span class="free-badge">🎁 مجاني</span>{% endif %}</td>
                             <td>{{ user.premium_until or '-' }}</td>
                             
-                            <!-- عمود الصور - عرض مختلف للمميزين -->
+                            <!-- عمود الصور -->
                             <td>
                                 {% if user.status == 'premium' %}
                                     <span class="total-badge">📊 {{ user.total_usage.thumbnail|default(0) }}</span>
@@ -286,7 +286,7 @@
                                 {% endif %}
                             </td>
                             
-                            <!-- عمود الروابط - عرض مختلف للمميزين -->
+                            <!-- عمود الروابط -->
                             <td>
                                 {% if user.status == 'premium' %}
                                     <span class="total-badge">📊 {{ user.total_usage.playlist|default(0) }}</span>
@@ -295,12 +295,21 @@
                                 {% endif %}
                             </td>
                             
-                            <!-- عمود التحليل - عرض مختلف للمميزين -->
+                            <!-- عمود التحليل -->
                             <td>
                                 {% if user.status == 'premium' %}
                                     <span class="total-badge">📊 {{ user.total_usage.analyzer|default(0) }}</span>
                                 {% else %}
                                     <span class="usage-badge">{{ user.usage.analyzer|default(0) }}/{{ free_limit }}</span>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- عمود الأغاني (جديد) -->
+                            <td>
+                                {% if user.status == 'premium' %}
+                                    <span class="total-badge">📊 {{ user.total_usage.songs|default(0) }}</span>
+                                {% else %}
+                                    <span class="usage-badge">{{ user.usage.songs|default(0) }}/{{ free_limit }}</span>
                                 {% endif %}
                             </td>
                             
@@ -365,16 +374,16 @@
             }
         });
         
-        // رسم بياني لاستخدامات البوتات
+        // رسم بياني لاستخدامات البوتات (مع إضافة بوت الأغاني)
         const usageCtx = document.getElementById('botUsageChart').getContext('2d');
         new Chart(usageCtx, {
             type: 'bar',
             data: {
-                labels: ['بوت الصور', 'بوت الروابط', 'بوت التحليل'],
+                labels: ['بوت الصور', 'بوت الروابط', 'بوت التحليل', 'بوت الأغاني'],
                 datasets: [{
                     label: 'إجمالي الاستخدامات',
-                    data: [{{ stats.total_uses_photos }}, {{ stats.total_uses_playlist }}, {{ stats.total_uses_analyzer }}],
-                    backgroundColor: ['#667eea', '#48bb78', '#ed8936'],
+                    data: [{{ stats.total_uses_photos }}, {{ stats.total_uses_playlist }}, {{ stats.total_uses_analyzer }}, {{ stats.total_uses_songs|default(0) }}],
+                    backgroundColor: ['#667eea', '#48bb78', '#ed8936', '#f59e0b'],
                     borderRadius: 8,
                     barPercentage: 0.6
                 }]
